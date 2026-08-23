@@ -238,14 +238,11 @@ def main() -> None:
     print("saved metrics.csv, confusion_matrix.csv")
     print(cm_table)
 
-    # 6. final model: retrain on ALL of train.csv with identical hyperparameters,
-    #    then predict churn probability for test.csv
-    final_model = XGBClassifier(**XGB_PARAMS)
-    final_model.fit(X, y)
-
+    # 6. predict test.csv with the SAME model that was evaluated above —
+    #    the reported validation metrics describe exactly this model
     X_test = test.drop(columns=ID_COLS).copy()
     X_test[CAT_COLS] = X_test[CAT_COLS].astype("category")
-    proba_test = final_model.predict_proba(X_test)[:, 1]
+    proba_test = model.predict_proba(X_test)[:, 1]
 
     output = test.copy()
     output["Exited_Prob"] = proba_test.round(4)
