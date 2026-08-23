@@ -119,12 +119,3 @@ python main.py
 | `06_roc_pr_curves.png` | ROC 曲線與 Precision-Recall 曲線(驗證集) |
 | `07_threshold_sweep.png` | F1 vs 決策門檻;最佳值 0.35 |
 
-## 可能的改進方向
-
-- **行為類特徵**(交易頻率、客訴紀錄、產品使用狀況)—— 比任何模型面的
-  改動更能提高天花板。
-- **機率校準**(isotonic / Platt)—— 若機率要直接餵入成本計算。
-- **成本導向門檻** —— 取得挽留成本與流失損失後,以期望成本最小化
-  取代 F1 來選門檻。
-- **輕量超參數搜索**(`max_depth`、`min_child_weight`、`subsample`)——
-  預期僅有邊際收益。
