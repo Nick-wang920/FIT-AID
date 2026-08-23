@@ -1,0 +1,8 @@
+metric,value
+Evaluated_on,"validation set (20% of train, 33,007 rows)"
+ROC_AUC,0.8885
+Decision_threshold,0.35
+F1,0.6662
+Precision,0.6616
+Recall,0.6708
+Accuracy,0.8578
