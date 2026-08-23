@@ -1,98 +1,93 @@
-# Task 2: Machine Learning — Bank Customer Churn Prediction
+# Task 2: Machine Learning — 銀行客戶流失預測
 
-Predict the probability of `Exited` (customer churn) for every customer in
-`test.csv`, using a model trained on `train.csv`, and report the model's
-predictive ability.
+使用 `train.csv` 訓練模型,預測 `test.csv` 中每位客戶的流失(`Exited`)機率,
+並報告模型的預測能力。
 
-## Quick start
+## 快速執行
 
 ```bash
 pip install -r requirements.txt
 python main.py
 ```
 
-- Python 3.10+ (developed on 3.11).
-- **macOS only**: XGBoost needs the OpenMP runtime — `brew install libomp`.
-- Runtime: ~1 minute. All results are reproducible (fixed `random_state=42`).
+- Python 3.10+(開發環境為 3.11)
+- **macOS 使用者**:XGBoost 需要 OpenMP 執行庫 → `brew install libomp`
+- 執行時間約 1 分鐘;所有結果皆可重現(固定 `random_state=42`)
 
-## Files
+## 檔案說明
 
-| File | What it is |
+| 檔案 | 內容 |
 |---|---|
-| `main.py` | One-click pipeline: load → EDA plots → train → evaluate → export CSVs |
-| `churn_analysis.ipynb` | Exploration notebook with the full EDA narrative and reasoning |
-| `requirements.txt` | Dependencies |
-| `train.csv` / `test.csv` | Provided data (165,034 / 110,023 rows) |
+| `main.py` | 一鍵執行的完整流程:讀檔 → EDA 圖表 → 訓練 → 評估 → 輸出 CSV |
+| `churn_analysis.ipynb` | 探索分析 notebook,含完整的 EDA 敘述與推理過程 |
+| `requirements.txt` | 相依套件 |
+| `train.csv` / `test.csv` | 題目提供的資料(165,034 / 110,023 筆) |
 
-### Outputs (created by `python main.py`)
+### 輸出檔(由 `python main.py` 產生)
 
-| Output | Content |
+| 輸出 | 內容 |
 |---|---|
-| `predictions.csv` | All original `test.csv` columns + **`Exited_Prob`** (predicted churn probability) + **`Exited_Pred`** (binary prediction at threshold 0.35) |
-| `metrics.csv` | ROC AUC, F1, Precision, Recall, Accuracy and the decision threshold |
-| `confusion_matrix.csv` | Labelled 2×2 confusion matrix |
-| `plots/*.png` | 7 figures: EDA (01–04) and model evaluation (05–07) |
+| `predictions.csv` | `test.csv` 原始欄位 + **`Exited_Prob`**(預測流失機率)+ **`Exited_Pred`**(門檻 0.35 下的二元分類) |
+| `metrics.csv` | ROC AUC、F1、Precision、Recall、Accuracy 與決策門檻 |
+| `confusion_matrix.csv` | 含行列標籤的 2×2 混淆矩陣 |
+| `plots/*.png` | 7 張圖:EDA(01–04)與模型評估(05–07) |
 
-> **Where do the evaluation numbers come from?** `test.csv` has no labels, so
-> the model cannot be evaluated on it. All metrics are computed on a
-> **held-out validation set**: a stratified 20% split of `train.csv`
-> (33,007 rows) that the model never sees during training.
+> **評估數字從哪裡來?** `test.csv` 沒有標籤,無法用來評估模型。
+> 所有指標皆計算於**保留驗證集**:從 `train.csv` 分層切出的 20%
+> (33,007 筆),模型訓練過程完全沒有看過這些資料。
 
-## Method
+## 方法說明
 
-### 1. EDA findings (see notebook / `plots/01–04`)
+### 1. EDA 發現(詳見 notebook 與 `plots/01–04`)
 
-- **Class imbalance** — 21.2% churn. Accuracy alone is misleading; evaluation
-  uses ROC AUC, F1, precision/recall instead.
-- **Age** — churned customers are clearly older on average.
-- **NumOfProducts is non-monotonic** — churn rate is 35% with 1 product,
-  only **6%** with 2, but **88%** with 3–4. A single linear coefficient cannot
-  express this U-shape.
-- **Correlated explanatory variables** — e.g. `Geography_Germany` × `Balance`
-  correlate at 0.54 (German customers almost always hold a positive balance).
-- **Weak features** — `CreditScore`, `EstimatedSalary`, `Tenure`, `HasCrCard`
-  distributions almost fully overlap between the two classes.
+- **類別不平衡** — 流失率 21.2%。單看 Accuracy 會誤導,
+  因此評估改用 ROC AUC、F1、Precision / Recall。
+- **Age** — 流失客戶的年齡明顯偏高。
+- **NumOfProducts 非單調** — 持有 1 個產品流失率 35%、2 個僅 **6%**、
+  3–4 個卻高達 **88%**。單一線性係數無法表達這種 U 型關係。
+- **解釋變數間相關** — 例如 `Geography_Germany` × `Balance` 相關係數 0.54
+  (德國客戶幾乎都持有正餘額)。
+- **弱特徵** — `CreditScore`、`EstimatedSalary`、`Tenure`、`HasCrCard`
+  在流失/留存兩群的分布幾乎重疊。
 
-### 2. Model choice — driven by the data characteristics
+### 2. 模型選擇 — 由資料特性推導
 
-Non-linear / non-monotonic patterns, correlated mixed-type features, no missing
-values, and a mid-sized tabular dataset (165k rows) are exactly the setting
-where gradient-boosted trees excel. **XGBoost** was selected:
+非線性/非單調的 pattern、混合型態且彼此相關的特徵、無缺失值、
+16 萬筆的中型表格資料——這正是梯度提升樹(gradient-boosted trees)
+最擅長的場景,因此選擇 **XGBoost**:
 
-- Trees capture the NumOfProducts U-shape and feature interactions
-  automatically (no manual dummy/binning engineering needed).
-- Insensitive to feature scaling and multicollinearity.
-- Native categorical support (`enable_categorical=True`) — `Geography` and
-  `Gender` are fed directly as `category` dtype.
+- 樹模型自動捕捉 NumOfProducts 的 U 型關係與特徵交互作用,
+  不需手工做虛擬變數或分箱。
+- 對特徵尺度與共線性不敏感,無須標準化。
+- 原生支援類別特徵(`enable_categorical=True`)——`Geography` 與
+  `Gender` 直接以 `category` 型態餵入。
 
-Hyperparameters are kept moderate and fixed
-(`n_estimators=300, learning_rate=0.1, max_depth=6`) — no heavy tuning, since
-the validation AUC (0.889) already sits near this dataset's practical ceiling.
+超參數保持適度且固定
+(`n_estimators=300, learning_rate=0.1, max_depth=6`),不做重度調參——
+驗證集 AUC(0.889)已接近此資料集的實務天花板。
 
-### 3. Validation design
+### 3. 驗證架構
 
-1. **Stratified 80/20 split** of `train.csv` — stratification preserves the
-   21.2% churn rate on both sides.
-2. Train on 80%; **all reported metrics/curves come from the 20% validation set**.
-3. The learning curve (`plots/05`) monitors train vs. validation logloss per
-   boosting round to check for overfitting.
+1. 對 `train.csv` 做 **分層 80/20 切分** —— 分層抽樣讓兩邊都維持
+   21.2% 的流失率。
+2. 以 80% 訓練;**所有報告的指標與曲線皆來自 20% 驗證集**。
+3. 學習曲線(`plots/05`)逐輪監控訓練/驗證 logloss,確認沒有過擬合。
 
-### 4. Decision threshold
+### 4. 決策門檻
 
-The model outputs probabilities. To also provide a hard classification, the
-threshold was swept over 0.05–0.95 and chosen to **maximise F1 on the
-validation set** → **t = 0.35** (`plots/07`). The optimum sits below 0.5
-because of class imbalance: lowering the threshold trades a little precision
-for substantially better recall on the minority (churn) class.
+模型輸出的是機率。為了同時提供二元分類結果,將門檻在 0.05–0.95 之間
+掃描,選擇**驗證集上 F1 最大**的位置 → **t = 0.35**(`plots/07`)。
+最佳門檻低於 0.5 的原因是類別不平衡:降低門檻犧牲少量 precision,
+換取少數類(流失)明顯更高的 recall。
 
-### 5. Final model
+### 5. 最終模型
 
-Retrained on **100% of `train.csv`** with identical hyperparameters, then used
-to predict `Exited_Prob` for `test.csv` (110,023 rows).
+以相同超參數用 **100% 的 `train.csv`** 重新訓練,
+再對 `test.csv`(110,023 筆)輸出 `Exited_Prob`。
 
-## Results (validation set, 33,007 rows)
+## 結果(驗證集,33,007 筆)
 
-| Metric | Value |
+| 指標 | 數值 |
 |---|---|
 | ROC AUC | **0.8885** |
 | F1 @ t=0.35 | **0.6662** |
@@ -100,38 +95,36 @@ to predict `Exited_Prob` for `test.csv` (110,023 rows).
 | Recall | 0.6708 |
 | Accuracy | 0.8578 |
 
-Confusion matrix @ t = 0.35:
+混淆矩陣 @ t = 0.35:
 
 | | Pred: Stayed | Pred: Exited |
 |---|---|---|
 | **True: Stayed** | 23,627 | 2,396 |
 | **True: Exited** | 2,299 | 4,685 |
 
-**Interpretation.** Against a 21.2% churn base rate, precision of 0.66 is a
-~3× lift: two of every three customers flagged by the model are true churners,
-while capturing 67% of all churners. The residual error is dominated by the
-information limit of the available features (no behavioural signals such as
-complaints or transaction activity), not by model capacity.
+**解讀:** 相對 21.2% 的流失底率,precision 0.66 約為 **3 倍提升**——
+模型標記的客戶中,每 3 位有 2 位是真流失者,同時抓到了全部流失者的
+67%。剩餘誤差主要來自特徵所含資訊的極限(缺少客訴、交易活躍度等
+行為訊號),而非模型容量不足。
 
-## Plots
+## 圖表說明
 
-| File | Shows |
+| 檔案 | 內容 |
 |---|---|
-| `01_target_distribution.png` | Class imbalance (21.2% churn) |
-| `02_numeric_distributions.png` | Numeric features by churn status (Age separates best) |
-| `03_churn_rate_by_category.png` | Churn rate per category (NumOfProducts U-shape) |
-| `04_correlation_heatmap.png` | Feature correlations incl. target |
-| `05_learning_curve.png` | Train vs. validation logloss per boosting round |
-| `06_roc_pr_curves.png` | ROC curve and Precision-Recall curve (validation) |
-| `07_threshold_sweep.png` | F1 vs. decision threshold; optimum at 0.35 |
+| `01_target_distribution.png` | 類別不平衡(流失率 21.2%) |
+| `02_numeric_distributions.png` | 數值特徵在流失/留存兩群的分布(Age 區分度最高) |
+| `03_churn_rate_by_category.png` | 各類別的流失率(NumOfProducts 呈 U 型) |
+| `04_correlation_heatmap.png` | 特徵相關係數(含目標變數) |
+| `05_learning_curve.png` | 訓練 vs 驗證 logloss 學習曲線 |
+| `06_roc_pr_curves.png` | ROC 曲線與 Precision-Recall 曲線(驗證集) |
+| `07_threshold_sweep.png` | F1 vs 決策門檻;最佳值 0.35 |
 
-## Possible improvements
+## 可能的改進方向
 
-- Behavioural features (transaction frequency, complaints, product usage)
-  would raise the ceiling more than any modelling change.
-- Probability calibration (isotonic / Platt) if probabilities feed a
-  cost-based decision.
-- Cost-sensitive threshold: replace F1 with expected-cost minimisation once
-  retention/churn costs are known.
-- Light hyperparameter search (`max_depth`, `min_child_weight`, `subsample`)
-  for marginal gains.
+- **行為類特徵**(交易頻率、客訴紀錄、產品使用狀況)—— 比任何模型面的
+  改動更能提高天花板。
+- **機率校準**(isotonic / Platt)—— 若機率要直接餵入成本計算。
+- **成本導向門檻** —— 取得挽留成本與流失損失後,以期望成本最小化
+  取代 F1 來選門檻。
+- **輕量超參數搜索**(`max_depth`、`min_child_weight`、`subsample`)——
+  預期僅有邊際收益。
